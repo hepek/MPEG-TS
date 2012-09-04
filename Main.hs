@@ -1,52 +1,68 @@
 module Main (main) where
+
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.ByteString as BS
-import Data.ByteString.Lazy (empty)
+import qualified Data.ByteString      as BS
+
 import Data.Binary.Get
 import Data.Word
-import Control.Applicative hiding (empty)
 import Data.Bits
 
-import Data.List.Split
+import Control.Applicative hiding (empty)
+import Control.Monad
+
 import Data.List
 import Data.Maybe
+import System.Environment
 
-import Data.Set as S (fromList, toList)
+import Codec.Video.MpegTS
 
-import MpegTS
+filterPID pid = filter ((pid==).ts_pid)
 
--- selectP :: PID -> [TS] -> [BS.ByteString]
--- selectP pid xs = concatMap (map getData) $ splitStream $ filter ((==pid).ts_pid) xs
---    where splitStream = split $ whenElt getData
---          getData (TS _ _ _ _ Nothing )  = BS.empty
---          getData (TS _ _ _ _ (Just d)) = d
-         
-parseListOf parser bytestring offset = 
-  let (x, rest, i) = runGetState parser bytestring offset
-  in
-    if rest == empty
-       then x:[]
-       else x:(parseListOf parser rest i)
+printUsage = do
+  name <- getProgName
+  putStrLn$ "Usage: " ++ name ++ " info <FILE>"
+  putStrLn$ "       " ++ name ++ " select pid <SOURCEFILE> <DESTFILE>"
 
-collectTS = parseListOf decodeTS
+printInfo fileName = do
+  bytes <- BL.readFile fileName
+  let tspackets = collectTS bytes 0
+  let patTS     = head $ filter ((0==).ts_pid) tspackets
+  let pat        = runGet (decodePAT (ts_pst patTS))
+                          (BL.fromChunks [fromJust.ts_data$ patTS])
 
---uniq :: [a] -> [a]
---uniq = S.toList . S.fromList
+  forM_ (pat_programs pat)
+    (\(PAT_Prog num pid) -> do
+        putStrLn$ "Program: " ++ (show num)
+        let pmtTS = head $ filterPID pid tspackets
+        let pmt   =  runGet (decodePMT (ts_pst pmtTS)) (BL.fromChunks [fromJust.ts_data$ pmtTS])
+        printPMT pmt)
+
+     where
+       printPMT (PMT _  _ pcrpid _ progs) = do
+         putStrLn$ "\tPCR: " ++ show pcrpid
+         forM progs
+           (\(PMT_Prog st pid info) -> do
+             putStrLn$ "\tStream PID: "    ++ show pid
+             putStrLn$ "\t\tStream Type: " ++ show st
+             putStrLn$ "\t\tDescription: " ++ show info)
+
+selectPID pid sourceFileName destinationFileName = do
+  bytes <- BL.readFile sourceFileName
+  mapM_ (\x-> case (ts_data x) of
+                  Just datum -> BS.appendFile destinationFileName datum
+                  Nothing    -> return ())
+       (filterPID pid $ collectTS bytes 0)
+  return ()
 
 main = do
-  bytes <- BL.readFile "HD.mpg"
-  let tspackets = collectTS bytes 0
-  let pmt = map fromJust $ map ts_data $ filter ((32==).ts_pid) $ tspackets
-  print $ runGet (decodePMT True) (BL.fromChunks [(head pmt)])
-  return tspackets
-
-main2 = do
-  bytes <- BL.readFile "HD.mpg"
-  return  $ map ts_data $ filter ((0x0==).ts_pid) $ collectTS bytes 0
---  mapM_ print $ uniq $ map ts_pid $ collectTS bytes 0
--- mapM_ print $ (map (\x-> (head x, length x))).group.sort $ map getPID $ collectTS bytes 0
-
---test = do pd <- main
---          let (pat, _, _) = runGetState (decodePAT True) (BL.fromChunks [pd]) 0
---          print 
---pat
+  args <- getArgs
+  case args of 
+    [command, fileName] ->
+      case command of
+        "info"   -> printInfo fileName
+        _        -> printUsage
+    [command, pid, sFileName, dFileName] ->
+      case command of
+        "select"  -> selectPID (read pid) sFileName dFileName
+        _         -> printUsage
+    _ -> printUsage
