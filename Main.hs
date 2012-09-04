@@ -13,6 +13,8 @@ import Control.Monad
 import Data.List
 import Data.Maybe
 import System.Environment
+import System.Directory (removeFile)
+import System.Posix.Files
 
 import Codec.Video.MpegTS
 
@@ -46,10 +48,13 @@ printInfo fileName = do
              putStrLn$ "\t\tStream Type: " ++ show st
              putStrLn$ "\t\tDescription: " ++ show info)
 
-selectPID pid sourceFileName destinationFileName = do
-  bytes <- BL.readFile sourceFileName
+
+selectPID pid srcFileName destFileName = do
+  bytes <- BL.readFile srcFileName
+  exists <- fileExist destFileName
+  when exists (removeFile destFileName)
   mapM_ (\x-> case (ts_data x) of
-                  Just datum -> BS.appendFile destinationFileName datum
+                  Just datum -> BS.appendFile destFileName datum
                   Nothing    -> return ())
        (filterPID pid $ collectTS bytes 0)
   return ()
