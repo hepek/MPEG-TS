@@ -9,6 +9,7 @@ import Data.Bits
 
 import Data.List.Split
 import Data.List
+import Data.Maybe
 
 import Data.Set as S (fromList, toList)
 
@@ -34,11 +35,18 @@ collectTS = parseListOf decodeTS
 
 main = do
   bytes <- BL.readFile "HD.mpg"
+  let tspackets = collectTS bytes 0
+  let pmt = map fromJust $ map ts_data $ filter ((32==).ts_pid) $ tspackets
+  print $ runGet (decodePMT True) (BL.fromChunks [(head pmt)])
+  return tspackets
+
+main2 = do
+  bytes <- BL.readFile "HD.mpg"
   return  $ map ts_data $ filter ((0x0==).ts_pid) $ collectTS bytes 0
 --  mapM_ print $ uniq $ map ts_pid $ collectTS bytes 0
 -- mapM_ print $ (map (\x-> (head x, length x))).group.sort $ map getPID $ collectTS bytes 0
 
 --test = do pd <- main
 --          let (pat, _, _) = runGetState (decodePAT True) (BL.fromChunks [pd]) 0
---          print pat
-          
+--          print 
+--pat
