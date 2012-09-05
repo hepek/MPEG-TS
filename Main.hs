@@ -14,6 +14,10 @@ import Data.List
 import Data.Maybe
 import System.Environment
 import System.Directory (removeFile)
+import System.IO
+
+import Network.Socket hiding (send, sendTo, recv, recvFrom)
+import Network.Socket.ByteString.Lazy as NL
 
 import Codec.Video.MpegTS
 
@@ -21,11 +25,23 @@ filterPID pid = filter ((pid==).ts_pid)
 
 printUsage = do
   name <- getProgName
-  putStrLn$ "Usage: " ++ name ++ " info <FILE>"
-  putStrLn$ "       " ++ name ++ " select pid <SOURCEFILE> <DESTFILE>"
+  hPutStrLn stderr $ unlines 
+    [name ++ " - a program for MPEGTS stream analysis."
+    ,"Usage: " ++ name ++ " info <FILE>                        #to view stream info of a file"
+    ,"       " ++ name ++ " info <HOST> <PORT>                 #to view stream info of a UDP stream"
+    ,"       " ++ name ++ " demux pid <SOURCEFILE> <DESTFILE>  #to demux a file"]
 
-printInfo fileName = do
-  bytes <- BL.readFile fileName
+printInfoFile = printInfo <=< BL.readFile
+printInfoUDP  = printInfo <=< readUDP 
+  where
+    readUDP (host,port) = withSocketsDo $ do
+      serveraddr <- head <$> getAddrInfo Nothing (Just host) (Just port)
+      sock <- socket (addrFamily serveraddr) Datagram defaultProtocol
+      putStrLn $ "connecting to " ++ host ++ ':':port
+      connect sock (addrAddress serveraddr)
+      NL.getContents sock      
+
+printInfo bytes = do
   let tspackets = collectTS bytes 0
   let patTS     = head $ filterPID 0 tspackets
   let pat       = runGet (decodePAT (ts_pst patTS))
@@ -50,15 +66,19 @@ printInfo fileName = do
 
 selectPID pid srcFileName destFileName = do
   bytes <- BL.readFile srcFileName
-  mapM_ (\x-> case (ts_data x) of
-                  Just datum -> BS.appendFile destFileName datum
-                  Nothing    -> return ())
-       (filterPID pid $ collectTS bytes 0)
+  let packets = (filterPID pid $ collectTS bytes 0)
+  case packets of
+    [] -> error $ "PID " ++ (show pid) ++ " not present in the stream"
+    _  ->
+      forM_ packets (\x-> case (ts_data x) of
+                        Just datum -> BS.appendFile destFileName datum
+                        Nothing    -> return ())
   return ()
 
 main = do
   args <- getArgs
   case args of
-    ["info", fileName]                    -> printInfo fileName
-    ["select", pid, sFileName, dFileName] -> selectPID (read pid) sFileName dFileName
+    ["info", fileName]                    -> printInfoFile fileName
+    ["info", host, port]                  -> printInfoUDP  (host,port)
+    ["demux", pid, sFileName, dFileName]  -> selectPID (read pid) sFileName dFileName
     _ -> printUsage
