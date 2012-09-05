@@ -56,21 +56,10 @@ data PES = PES { pes_sid :: SID
                , pes_data :: Data
                } deriving (Show)
 
-data StreamType = VIDEO_MPEG1
-                | VIDEO_MPEG2
-                | AUDIO_MPEG1
-                | AUDIO_MPEG2
-                | PRIVATE_SECTION
-                | PRIVATE_DATA
-                | AUDIO_AAC
-                | VIDEO_MPEG4
-                | AUDIO_LATM_AAC
-                | SYSTEMS_MPEG4_PES
-                | SYSTEMS_MPEG4_SECTIONS
-                | VIDEO_H264
-                | AUDIO_AC3
-                | AUDIO_DTS
-                | SUBTITLE_DVB
+data StreamType = VIDEO_MPEG1     | VIDEO_MPEG2    | AUDIO_MPEG1 | AUDIO_MPEG2
+                | PRIVATE_SECTION | PRIVATE_DATA   | AUDIO_AAC   | VIDEO_MPEG4
+                | AUDIO_LATM_AAC  | SYSTEMS_MPEG4_PES | SYSTEMS_MPEG4_SECTIONS
+                | VIDEO_H264      | AUDIO_AC3      | AUDIO_DTS   | SUBTITLE_DVB
                 | Other Word8
                   deriving (Show)
 
@@ -92,32 +81,15 @@ fromWord8 0x100 = SUBTITLE_DVB
 fromWord8 x     = Other x
 
 data ESDescriptor = Reserved
-                  | Video_stream_descriptor
-                  | Audio_stream_descriptor
-                  | Hierarchy_descriptor
-                  | Registration_descriptor
-                  | Data_stream_alignment_descriptor
-                  | Target_background_grid_descriptor
-                  | Video_window_descriptor
-                  | CA_descriptor
-                  | ISO_639_language_descriptor
-                  | System_clock_descriptor
-                  | Multiplex_buffer_utilization_descriptor
-                  | Copyright_descriptor
-                  | Maximum_bitrate_descriptor
-                  | Private_data_indicator_descriptor
-                  | Smoothing_buffer_descriptor
-                  | STD_descriptor
-                  | IBP_descriptor
-                  | MPEG
-                  | IOD_descriptor
-                  | SL_descriptor
-                  | FMC_descriptor
-                  | External_ES_ID_descriptor
-                  | MuxCode_descriptor
-                  | FmxBufferSize_descriptor
-                  | MultiplexBuffer_descriptor
-                  | FlexMuxTiming_descriptor
+                  | Video_stream_descriptor           | Audio_stream_descriptor          | Hierarchy_descriptor
+                  | Registration_descriptor           | Data_stream_alignment_descriptor | Target_background_grid_descriptor
+                  | Video_window_descriptor           | CA_descriptor                    | ISO_639_language_descriptor       
+                  | System_clock_descriptor           | Multiplex_buffer_utilization_descriptor
+                  | Copyright_descriptor              | Maximum_bitrate_descriptor       | Private_data_indicator_descriptor
+                  | Smoothing_buffer_descriptor       | STD_descriptor                   | IBP_descriptor
+                  | MPEG                              | IOD_descriptor                   | SL_descriptor
+                  | FMC_descriptor                    | External_ES_ID_descriptor        | MuxCode_descriptor
+                  | FmxBufferSize_descriptor          | MultiplexBuffer_descriptor       | FlexMuxTiming_descriptor
                   | User_Private
                    deriving (Show)
 
@@ -151,7 +123,7 @@ esTag 34 =  FmxBufferSize_descriptor
 esTag 35 =  MultiplexBuffer_descriptor
 esTag 36 =  FlexMuxTiming_descriptor
 esTag x | (x >= 0x40 && x <= 0xFF) = User_Private
-            | otherwise = Reserved
+        | otherwise = Reserved
 
 decodeESDescriptor :: Int -> Get ESDescriptor
 decodeESDescriptor l = do

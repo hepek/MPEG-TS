@@ -17,7 +17,7 @@ import System.Directory (removeFile)
 import System.IO
 
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
-import Network.Socket.ByteString.Lazy as NL
+import qualified Network.Socket.ByteString.Lazy as NL
 
 import Codec.Video.MpegTS
 
