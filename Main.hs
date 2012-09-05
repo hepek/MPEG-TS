@@ -27,7 +27,7 @@ printUsage = do
 printInfo fileName = do
   bytes <- BL.readFile fileName
   let tspackets = collectTS bytes 0
-  let patTS     = head $ filter ((0==).ts_pid) tspackets
+  let patTS     = head $ filterPID 0 tspackets
   let pat       = runGet (decodePAT (ts_pst patTS))
                           (BL.fromChunks [fromJust.ts_data$ patTS])
 
@@ -58,13 +58,7 @@ selectPID pid srcFileName destFileName = do
 
 main = do
   args <- getArgs
-  case args of 
-    [command, fileName] ->
-      case command of
-        "info"   -> printInfo fileName
-        _        -> printUsage
-    [command, pid, sFileName, dFileName] ->
-      case command of
-        "select"  -> selectPID (read pid) sFileName dFileName
-        _         -> printUsage
+  case args of
+    ["info", fileName]                    -> printInfo fileName
+    ["select", pid, sFileName, dFileName] -> selectPID (read pid) sFileName dFileName
     _ -> printUsage
