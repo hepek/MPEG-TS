@@ -14,7 +14,6 @@ import Data.List
 import Data.Maybe
 import System.Environment
 import System.Directory (removeFile)
-import System.Posix.Files
 
 import Codec.Video.MpegTS
 
@@ -29,14 +28,14 @@ printInfo fileName = do
   bytes <- BL.readFile fileName
   let tspackets = collectTS bytes 0
   let patTS     = head $ filter ((0==).ts_pid) tspackets
-  let pat        = runGet (decodePAT (ts_pst patTS))
+  let pat       = runGet (decodePAT (ts_pst patTS))
                           (BL.fromChunks [fromJust.ts_data$ patTS])
 
   forM_ (pat_programs pat)
     (\(PAT_Prog num pid) -> do
         putStrLn$ "Program: " ++ (show num)
-        let pmtTS = head $ filterPID pid tspackets
-        let pmt   =  runGet (decodePMT (ts_pst pmtTS)) (BL.fromChunks [fromJust.ts_data$ pmtTS])
+        let pmtTS = filterPID pid tspackets
+        let pmt   = runGet (decodePMT $ ts_pst.head $ pmtTS) (BL.fromChunks (map (fromJust.ts_data) pmtTS))
         printPMT pmt)
 
      where
@@ -51,8 +50,6 @@ printInfo fileName = do
 
 selectPID pid srcFileName destFileName = do
   bytes <- BL.readFile srcFileName
-  exists <- fileExist destFileName
-  when exists (removeFile destFileName)
   mapM_ (\x-> case (ts_data x) of
                   Just datum -> BS.appendFile destFileName datum
                   Nothing    -> return ())
