@@ -18,6 +18,7 @@ import System.IO
 
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import qualified Network.Socket.ByteString.Lazy as NL
+import Network.Multicast
 
 import Codec.Video.MpegTS
 
@@ -35,11 +36,8 @@ printInfoFile = printInfo <=< BL.readFile
 printInfoUDP  = printInfo <=< readUDP 
   where
     readUDP (host,port) = withSocketsDo $ do
-      serveraddr <- head <$> getAddrInfo Nothing (Just host) (Just port)
-      sock <- socket (addrFamily serveraddr) Datagram defaultProtocol
-      putStrLn $ "connecting to " ++ host ++ ':':port
-      connect sock (addrAddress serveraddr)
-      NL.getContents sock      
+      sock <- multicastReceiver host (PortNum (read port))
+      NL.getContents sock
 
 printInfo bytes = do
   let tspackets = collectTS bytes 0
