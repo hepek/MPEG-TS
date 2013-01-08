@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 module Codec.Video.MpegTS where
 
 import qualified Data.ByteString.Lazy as BL
@@ -11,49 +13,82 @@ import Data.Bits
 import Control.Applicative hiding (empty)
 import Control.Monad
 
+import Debug.Trace
+
 type Data         = BS.ByteString
-type Adaptation   = BS.ByteString
 type PID          = Word16
 type PayloadStart = Bool
 type ContC        = Word8
 type SID          = Word8
 
 data TS = TS
-           { ts_pid   :: PID
-           , ts_pst   :: PayloadStart
-           , ts_contc :: ContC
-           , ts_ad    :: Maybe Adaptation
-           , ts_data  :: Maybe Data
+           { ts_pid   :: !PID
+           , ts_pst   :: !PayloadStart
+           , ts_contc :: !ContC
+           , ts_ad    :: !(Maybe Adaptation)
+           , ts_data  :: !(Maybe Data)
            } deriving (Show)
 
 data PAT = PAT
-           { pat_nextS       :: Bool
-           , pat_section     :: Word8
-           , pat_lastSection :: Word8
-           , pat_programs    :: [PAT_Prog]
+           { pat_nextS       :: !Bool
+           , pat_section     :: !Word8
+           , pat_lastSection :: !Word8
+           , pat_programs    :: ![PAT_Prog]
            } deriving (Show)
 
 data PAT_Prog = PAT_Prog
-               { prog_num :: Word16
-               , prog_pid :: Word16
+               { prog_num :: !Word16
+               , prog_pid :: !Word16
                } deriving (Show)
 
 data PMT = PMT
-           { pmt_prog_num    :: Word16
-           , pmt_nextS       :: Bool
-           , pmt_pcrPID      :: Word16
-           , pmt_programDesc :: Data
-           , pmt_progs       :: [PMT_Prog]
+           { pmt_prog_num    :: !Word16
+           , pmt_nextS       :: !Bool
+           , pmt_pcrPID      :: !Word16
+           , pmt_programDesc :: !Data
+           , pmt_progs       :: ![PMT_Prog]
            } deriving (Show)
 
 data PMT_Prog = PMT_Prog
-              { pmtp_streamType :: StreamType
-              , pmtp_elemPID    :: Word16
-              , pmtp_esInfo     :: ESDescriptor
+              { pmtp_streamType :: !StreamType
+              , pmtp_elemPID    :: !Word16
+              , pmtp_esInfo     :: !ESDescriptor
               } deriving (Show)
 
-data PES = PES { pes_sid :: SID
-               , pes_data :: Data
+--type Adaptation   = BS.ByteString
+
+data AdaptationFlags = AdaptationFlags
+           { af_discont      :: !Bool
+           , af_randomAccess :: !Bool
+           , af_priority     :: !Bool
+           , af_pcr          :: !Bool
+           , af_opcr         :: !Bool
+           , af_splice       :: !Bool
+           , af_transportPrivateData :: !Bool
+           , af_extension    :: !Bool
+          }
+
+defaultAdaptationFlags = AdaptationFlags False False False False False False False False
+
+instance Show AdaptationFlags where
+  show (AdaptationFlags d r p pcr opcr spl tpd e) = 
+    (t d 'D') : (t p 'P') : (t pcr 'C') : (t opcr 'O') : (t spl 'S') : (t tpd 'P') : (t e 'E') : []
+    where
+      t f c = case f of
+                True  -> c
+                False -> '-'
+
+data Adaptation = Adaptation
+           { ad_len      :: !Int
+           , ad_flags    :: !AdaptationFlags
+           , ad_pcr      :: !(Maybe Int)
+           , ad_opcr     :: !(Maybe Int)
+           , ad_splice   :: !Int
+           } deriving (Show)
+
+
+data PES = PES { pes_sid  :: !SID
+               , pes_data :: !Data
                } deriving (Show)
 
 data StreamType = VIDEO_MPEG1     | VIDEO_MPEG2    | AUDIO_MPEG1 | AUDIO_MPEG2
@@ -138,19 +173,19 @@ decodeTS = do
     (ad, cc)  <- parseAD
     let pack = TS pid ps cc
     case ad of
-       0 -> fail "wrong adaptation field"
-       1 -> do d <- getByteString 184
-               return$ pack Nothing (Just d)
-       2 -> do af <- getByteString 184
+       --0 -> fail (show (pack Nothing Nothing) ++ ": wrong adaptation field code")
+       2 -> do af <- decodeAdaptation
+               skip (184-(ad_len af)-1)
                return$ pack (Just af) Nothing
-       3 -> do l  <- fromIntegral <$> getWord8
-               af <- getByteString l
-               d  <- getByteString (184-l-1)
+       3 -> do af <- decodeAdaptation
+               d  <- getByteString (184-(ad_len af)-1)
                return$ pack (Just af) (Just d)
+       _ -> do d <- getByteString 184
+               return$ pack Nothing (Just d)
      where
         checkSyncByte =
           do sync <- getWord8
-             when (sync /= 0x47) (fail "bad sync byte")
+             when (sync /= 0x47) checkSyncByte -- (fail$ "bad sync byte " ++ show sync)
         parsePID =
           do chunk <- getWord16be
              let ps  = testBit chunk 14
@@ -177,7 +212,7 @@ decodePES = do
       checkPSP = do
         pspa <- getWord16be
         pspb <- getWord8
-        when (pspa /= 0x0000 || pspb /= 0x01) (fail "bad sync byte")
+        when (pspa /= 0x0000 || pspb /= 0x01) (fail $ "bad psp sync bytes" ++ show pspa ++ " " ++ show pspb)
       getOptionalPES = do
         h <- getWord16be
         l <- fromIntegral <$> getWord8
@@ -233,11 +268,62 @@ decodePMT start = do
               , pmt_progs       = progs
               }
 
+maybeParse False _     = return Nothing
+maybeParse True parser = do 
+  a <- parser
+  return (Just a)
+
+
+decodeAdaptation :: Get Adaptation
+decodeAdaptation = do
+  len    <- fromIntegral <$> getWord8
+  cursor <- bytesRead
+  flags <- 
+    if (len == 0)
+      then return defaultAdaptationFlags
+      else decodeAdaptationFlags
+  pcr    <- decodePCR (af_pcr  flags)
+  opcr   <- decodePCR (af_opcr flags)
+  splice <- case (af_splice flags) of
+                False -> return 0
+                True  -> fromIntegral <$> getWord8
+  cursor2 <- bytesRead
+  let consumed = fromIntegral (cursor2 - cursor)
+  skip (len-consumed)
+  return $ Adaptation len flags pcr opcr splice
+    where
+      decodePCR False = return Nothing
+      decodePCR True  = do
+        up <- getWord32be
+        --lw <- getWord16be TODO: extension n stuff
+        skip 2
+        let ret = 2 * fromIntegral up
+        return (Just ret)
+
+decodeAdaptationFlags :: Get AdaptationFlags
+decodeAdaptationFlags = do
+  flags <- getWord8
+  let test = testBit flags
+  return $ AdaptationFlags (test 7) (test 6) (test 5) (test 4)
+                           (test 3) (test 2) (test 1) (test 0)
+
+
 parseListOf parser bytestring offset =
   let (x, rest, i) = runGetState parser bytestring offset
   in
+    --trace ("read bytes: " ++ show i) $
     if rest == empty
        then x:[]
        else x:(parseListOf parser rest i)
 
+parseOffsetMap parser bytestring offset =
+  let (x, rest, i) = runGetState parser bytestring offset
+  in
+    --trace ("read bytes: " ++ show i) $
+    if rest == empty
+       then (x,i):[]
+       else (x,i):(parseOffsetMap parser rest i)
+
 collectTS = parseListOf decodeTS
+
+collectTSOff = parseOffsetMap decodeTS
