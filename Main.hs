@@ -1,4 +1,3 @@
-module Main (main) where
 
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString      as BS
@@ -64,7 +63,8 @@ showWOData ts = do
   putStrLn "------------------------"
 
 showAD Nothing   = "Nothing"
-showAD (Just ad) = "len: " ++ show (ad_len ad)  ++ " flags: " ++ show (ad_flags ad) ++ "\tpcr: " ++ show (ad_pcr ad) ++ "\topcr: " ++ show (ad_opcr ad) ++ "\tspl: " ++ show (ad_splice ad)
+showAD (Just ad) = "len: " ++ show (ad_len ad)  ++ " flags: " ++ show (ad_flags ad) ++ "\tpcr: " 
+                           ++ show (ad_pcr ad) ++ "\topcr: " ++ show (ad_opcr ad) ++ "\tspl: " ++ show (ad_splice ad)
 
 printAdaptation = printInfoAd <=< BL.readFile
  where
@@ -78,7 +78,8 @@ printDisconts pid = printInfoDisconts pid <=< BL.readFile
       mapM_ (\(ts, off) -> do
                 putStrLn$ "0x" ++ (showHex off ":")
                 showWOData ts)
-           (filter (\(ts,_) -> (af_discont.ad_flags) (fromJust (ts_ad ts))) $ filter (\(ts,_) -> (isJust.ts_ad $ ts) && (ts_pid ts == pid)) $ (collectTSOff bytes 0))
+           (filter (\(ts,_) -> (af_discont.ad_flags) (fromJust (ts_ad ts))) $ 
+            filter (\(ts,_) -> (isJust.ts_ad $ ts) && (ts_pid ts == pid)) $ (collectTSOff bytes 0))
 
 discontinuities pids tss = filter (\ts -> (af_discont.ad_flags) (fromJust (ts_ad ts))) $ filter (\ts -> (isJust.ts_ad $ ts) && (ts_pid ts `elem` pids)) $ tss
 

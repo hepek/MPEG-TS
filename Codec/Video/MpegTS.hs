@@ -22,74 +22,74 @@ type ContC        = Word8
 type SID          = Word8
 
 data TS = TS
-           { ts_pid   :: !PID
-           , ts_pst   :: !PayloadStart
-           , ts_contc :: !ContC
-           , ts_ad    :: !(Maybe Adaptation)
-           , ts_data  :: !(Maybe Data)
-           } deriving (Show)
+    { ts_pid   :: !PID
+    , ts_pst   :: !PayloadStart
+    , ts_contc :: !ContC
+    , ts_ad    :: !(Maybe Adaptation)
+    , ts_data  :: !(Maybe Data)
+    } deriving (Show)
 
 data PAT = PAT
-           { pat_nextS       :: !Bool
-           , pat_section     :: !Word8
-           , pat_lastSection :: !Word8
-           , pat_programs    :: ![PAT_Prog]
-           } deriving (Show)
+    { pat_nextS       :: !Bool
+    , pat_section     :: !Word8
+    , pat_lastSection :: !Word8
+    , pat_programs    :: ![PAT_Prog]
+    } deriving (Show)
 
 data PAT_Prog = PAT_Prog
-               { prog_num :: !Word16
-               , prog_pid :: !Word16
-               } deriving (Show)
+    { prog_num :: !Word16
+    , prog_pid :: !Word16
+    } deriving (Show)
 
 data PMT = PMT
-           { pmt_prog_num    :: !Word16
-           , pmt_nextS       :: !Bool
-           , pmt_pcrPID      :: !Word16
-           , pmt_programDesc :: !Data
-           , pmt_progs       :: ![PMT_Prog]
-           } deriving (Show)
+    { pmt_prog_num    :: !Word16
+    , pmt_nextS       :: !Bool
+    , pmt_pcrPID      :: !Word16
+    , pmt_programDesc :: !Data
+    , pmt_progs       :: ![PMT_Prog]
+    } deriving (Show)
 
 data PMT_Prog = PMT_Prog
-              { pmtp_streamType :: !StreamType
-              , pmtp_elemPID    :: !Word16
-              , pmtp_esInfo     :: !ESDescriptor
-              } deriving (Show)
+    { pmtp_streamType :: !StreamType
+    , pmtp_elemPID    :: !Word16
+    , pmtp_esInfo     :: !ESDescriptor
+    } deriving (Show)
 
 --type Adaptation   = BS.ByteString
 
 data AdaptationFlags = AdaptationFlags
-           { af_discont      :: !Bool
-           , af_randomAccess :: !Bool
-           , af_priority     :: !Bool
-           , af_pcr          :: !Bool
-           , af_opcr         :: !Bool
-           , af_splice       :: !Bool
-           , af_transportPrivateData :: !Bool
-           , af_extension    :: !Bool
-          }
+    { af_discont      :: !Bool
+    , af_randomAccess :: !Bool
+    , af_priority     :: !Bool
+    , af_pcr          :: !Bool
+    , af_opcr         :: !Bool
+    , af_splice       :: !Bool
+    , af_transportPrivateData :: !Bool
+    , af_extension    :: !Bool
+    }
 
 defaultAdaptationFlags = AdaptationFlags False False False False False False False False
 
 instance Show AdaptationFlags where
   show (AdaptationFlags d r p pcr opcr spl tpd e) = 
-    (t d 'D') : (t p 'P') : (t pcr 'C') : (t opcr 'O') : (t spl 'S') : (t tpd 'P') : (t e 'E') : []
-    where
-      t f c = case f of
+      (t d 'D') : (t p 'P') : (t pcr 'C') : (t opcr 'O') : (t spl 'S') : (t tpd 'P') : (t e 'E') : []
+          where
+            t f c = case f of
                 True  -> c
                 False -> '-'
 
 data Adaptation = Adaptation
-           { ad_len      :: !Int
-           , ad_flags    :: !AdaptationFlags
-           , ad_pcr      :: !(Maybe Int)
-           , ad_opcr     :: !(Maybe Int)
-           , ad_splice   :: !Int
-           } deriving (Show)
+    { ad_len      :: !Int
+    , ad_flags    :: !AdaptationFlags
+    , ad_pcr      :: !(Maybe Int)
+    , ad_opcr     :: !(Maybe Int)
+    , ad_splice   :: !Int
+    } deriving (Show)
 
-
-data PES = PES { pes_sid  :: !SID
-               , pes_data :: !Data
-               } deriving (Show)
+data PES = PES 
+    { pes_sid  :: !SID
+    , pes_data :: !Data
+    } deriving (Show)
 
 data StreamType = VIDEO_MPEG1     | VIDEO_MPEG2    | AUDIO_MPEG1 | AUDIO_MPEG2
                 | PRIVATE_SECTION | PRIVATE_DATA   | AUDIO_AAC   | VIDEO_MPEG4
@@ -162,9 +162,9 @@ esTag x | (x >= 0x40 && x <= 0xFF) = User_Private
 
 decodeESDescriptor :: Int -> Get ESDescriptor
 decodeESDescriptor l = do
-  tag <- getWord8
-  skip (l-1)
-  return (esTag tag)
+    tag <- getWord8
+           skip (l-1)
+    return (esTag tag)
 
 decodeTS :: Get TS
 decodeTS = do
@@ -253,6 +253,7 @@ decodePMT start = do
   pcr_pid      <- last13 <$> getWord16be
   pinfo_len    <- last10 <$> getWord16be
   program_desc <- getByteString (fromIntegral pinfo_len)
+
   progs <-
     forM [1..2] (\_ -> do
       stype    <- fromWord8 <$> getWord8
@@ -261,36 +262,38 @@ decodePMT start = do
       esDesc  <- decodeESDescriptor (fromIntegral esInfoL)
       return$ PMT_Prog stype pid esDesc)
   skip 4 --CRC32
-  return PMT {  pmt_prog_num    = prog_num
-              , pmt_nextS       = False
-              , pmt_pcrPID      = pcr_pid
-              , pmt_programDesc = program_desc
-              , pmt_progs       = progs
-              }
+
+  return PMT 
+             {  pmt_prog_num    = prog_num
+             , pmt_nextS       = False
+             , pmt_pcrPID      = pcr_pid
+             , pmt_programDesc = program_desc
+             , pmt_progs       = progs
+             }
 
 maybeParse False _     = return Nothing
 maybeParse True parser = do 
-  a <- parser
-  return (Just a)
+    a <- parser
+    return (Just a)
 
 
 decodeAdaptation :: Get Adaptation
 decodeAdaptation = do
-  len    <- fromIntegral <$> getWord8
-  cursor <- bytesRead
-  flags <- 
-    if (len == 0)
-      then return defaultAdaptationFlags
-      else decodeAdaptationFlags
-  pcr    <- decodePCR (af_pcr  flags)
-  opcr   <- decodePCR (af_opcr flags)
-  splice <- case (af_splice flags) of
+   len    <- fromIntegral <$> getWord8
+   cursor <- bytesRead
+   flags <- 
+       if (len == 0)
+       then return defaultAdaptationFlags
+       else decodeAdaptationFlags
+   pcr    <- decodePCR (af_pcr  flags)
+   opcr   <- decodePCR (af_opcr flags)
+   splice <- case (af_splice flags) of
                 False -> return 0
                 True  -> fromIntegral <$> getWord8
-  cursor2 <- bytesRead
-  let consumed = fromIntegral (cursor2 - cursor)
-  skip (len-consumed)
-  return $ Adaptation len flags pcr opcr splice
+   cursor2 <- bytesRead
+   let consumed = fromIntegral (cursor2 - cursor)
+   skip (len-consumed)
+   return $ Adaptation len flags pcr opcr splice
     where
       decodePCR False = return Nothing
       decodePCR True  = do
@@ -302,27 +305,25 @@ decodeAdaptation = do
 
 decodeAdaptationFlags :: Get AdaptationFlags
 decodeAdaptationFlags = do
-  flags <- getWord8
-  let test = testBit flags
-  return $ AdaptationFlags (test 7) (test 6) (test 5) (test 4)
-                           (test 3) (test 2) (test 1) (test 0)
+    flags <- getWord8
+    let test = testBit flags
+    return $ AdaptationFlags (test 7) (test 6) (test 5) (test 4)
+                             (test 3) (test 2) (test 1) (test 0)
 
 
 parseListOf parser bytestring offset =
-  let (x, rest, i) = runGetState parser bytestring offset
-  in
-    --trace ("read bytes: " ++ show i) $
+    let (x, rest, i) = runGetState parser bytestring offset
+    in
     if rest == empty
-       then x:[]
-       else x:(parseListOf parser rest i)
+    then x:[]
+    else x:(parseListOf parser rest i)
 
 parseOffsetMap parser bytestring offset =
-  let (x, rest, i) = runGetState parser bytestring offset
-  in
-    --trace ("read bytes: " ++ show i) $
+    let (x, rest, i) = runGetState parser bytestring offset
+    in
     if rest == empty
-       then (x,i):[]
-       else (x,i):(parseOffsetMap parser rest i)
+    then (x,i):[]
+    else (x,i):(parseOffsetMap parser rest i)
 
 collectTS = parseListOf decodeTS
 
