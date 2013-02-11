@@ -163,7 +163,7 @@ esTag x | (x >= 0x40 && x <= 0xFF) = User_Private
 decodeESDescriptor :: Int -> Get ESDescriptor
 decodeESDescriptor l = do
     tag <- getWord8
-           skip (l-1)
+    skip (l-1)
     return (esTag tag)
 
 decodeTS :: Get TS
