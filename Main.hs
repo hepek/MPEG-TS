@@ -22,38 +22,32 @@ import Numeric
 
 filterPID pid = filter ((pid==).ts_pid)
 
-printUsage = do
-  name <- getProgName
-  hPutStrLn stderr $ unlines
-    [name ++ " - a program for MPEGTS stream analysis."
-    ,"Usage: " ++ name ++ " info          <FILE>               #to view stream info of a file"
-    ,"       " ++ name ++ " adaptation    <FILE>               #to view stream adaptation fields"
-    ,"       " ++ name ++ " discont <PID> <FILE>               #to view stream discontinuities"
-    ,"       " ++ name ++ " hasDiscont    <FILE>               #to check for discontinuities in any program"
-    ,"       " ++ name ++ " demux pid <SOURCEFILE> <DESTFILE>  #to demux a file"]
-
 printInfoFile = printInfo <=< BL.readFile
 printInfo bytes = do
   let tspackets = collectTS bytes 0
-  let patTS     = head $ filterPID 0 tspackets
-  let pat       = runGet (decodePAT (ts_pst patTS))
-                          (BL.fromChunks [fromJust.ts_data$ patTS])
-
-  forM_ (pat_programs pat)
-    (\(PAT_Prog num pid) -> do
-        putStrLn$ "Program: " ++ (show num)
-        let pmtTS = filterPID pid tspackets
-        let pmt   = runGet (decodePMT $ ts_pst.head $ pmtTS) (BL.fromChunks (map (fromJust.ts_data) pmtTS))
-        printPMT pmt)
+  let pidpackets= filterPID 0 tspackets
+  handlePAT (head pidpackets) tspackets
 
      where
-       printPMT (PMT _  _ pcrpid _ progs) = do
-         putStrLn$ "\tPCR: " ++ show pcrpid
-         forM progs
-           (\(PMT_Prog st pid info) -> do
-             putStrLn$ "\tStream PID: "    ++ show pid
-             putStrLn$ "\t\tStream Type: " ++ show st
-             putStrLn$ "\t\tDescription: " ++ show info)
+      handlePAT patTS tspackets = do
+        let pat = (runGet.decodePAT) (ts_pst patTS)
+                   (BL.fromChunks [fromJust.ts_data$ patTS])
+
+        forM_ (pat_programs pat)
+          (\(PAT_Prog num pid) -> do
+            putStrLn$ "Program: " ++ (show num)
+            let pmtTS = filterPID pid tspackets
+            let pmt   = runGet (decodePMT $ ts_pst.head $ pmtTS) 
+                                (BL.fromChunks (map (fromJust.ts_data) pmtTS))
+            printPMT pmt)
+
+      printPMT (PMT _  _ pcrpid _ progs) = do
+       putStrLn$ "\tPCR: " ++ show pcrpid
+       forM progs
+         (\(PMT_Prog st pid info) -> do
+           putStrLn$ "\tStream PID: "    ++ show pid
+           putStrLn$ "\t\tStream Type: " ++ show st
+           putStrLn$ "\t\tDescription: " ++ show info)
 
 showWOData ts = do
   putStrLn$ "ts_pid: "   ++ (show $ ts_pid ts)
@@ -94,6 +88,12 @@ selectPID pid srcFileName destFileName = do
                         Nothing    -> return ())
   return ()
 
+
+uniqPids fileName = do
+  bytes <- BL.readFile fileName
+  let packets = collectTS bytes 0
+  mapM_ print $  nub $ map (ts_pid) packets
+
 hasDiscont = hasDiscont' <=< BL.readFile
  where
   hasDiscont' bytes = do
@@ -113,12 +113,29 @@ hasDiscont = hasDiscont' <=< BL.readFile
       else
         error "discontinuities found"
 
+printUsage = do
+  name <- getProgName
+  hPutStrLn stderr $ unlines
+    [name ++ " - a program for MPEGTS stream analysis."
+    ,"Usage: " ++ name ++ " info          <FILE>               " ++ 
+              "#to view stream info of a file"
+    ,"       " ++ name ++ " adaptation    <FILE>               " ++ 
+              "#to view stream adaptation fields"
+    ,"       " ++ name ++ " discont <PID> <FILE>               " ++ 
+              "#to view stream discontinuities"
+    ,"       " ++ name ++ " hasDiscont    <FILE>               " ++ 
+              "#to check for discontinuities in any program"
+    ,"       " ++ name ++ " uniqPids <FILE>                    " ++
+              "#to display a list of unique PIDs in a stream"
+    ,"       " ++ name ++ " demux pid <SOURCEFILE> <DESTFILE>  #to demux a file"]
+
 main = do
   args <- getArgs
   case args of
-    ["adaptation", fileName]              -> printAdaptation fileName
-    ["discont", pid, fileName]            -> printDisconts (read pid)  fileName
-    ["hasDiscont", fileName]              -> hasDiscont fileName
-    ["info",    fileName]                 -> printInfoFile   fileName
-    ["demux", pid, sFileName, dFileName]  -> selectPID (read pid) sFileName dFileName
+    ["adaptation",   fileName]           -> printAdaptation fileName
+    ["discont", pid, fileName]           -> printDisconts (read pid)  fileName
+    ["hasDiscont",   fileName]           -> hasDiscont fileName
+    ["info",         fileName]           -> printInfoFile   fileName
+    ["demux", pid,  sFileName, dFileName] -> selectPID (read pid) sFileName dFileName
+    ["uniqPids",     fileName]           -> uniqPids fileName
     _ -> printUsage

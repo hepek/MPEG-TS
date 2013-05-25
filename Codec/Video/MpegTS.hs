@@ -56,7 +56,6 @@ data PMT_Prog = PMT_Prog
     } deriving (Show)
 
 --type Adaptation   = BS.ByteString
-
 data AdaptationFlags = AdaptationFlags
     { af_discont      :: !Bool
     , af_randomAccess :: !Bool
