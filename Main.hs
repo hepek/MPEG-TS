@@ -24,7 +24,7 @@ filterPID pid = filter ((pid==).ts_pid)
 
 printUsage = do
   name <- getProgName
-  hPutStrLn stderr $ unlines 
+  hPutStrLn stderr $ unlines
     [name ++ " - a program for MPEGTS stream analysis."
     ,"Usage: " ++ name ++ " info          <FILE>               #to view stream info of a file"
     ,"       " ++ name ++ " adaptation    <FILE>               #to view stream adaptation fields"
@@ -63,7 +63,7 @@ showWOData ts = do
   putStrLn "------------------------"
 
 showAD Nothing   = "Nothing"
-showAD (Just ad) = "len: " ++ show (ad_len ad)  ++ " flags: " ++ show (ad_flags ad) ++ "\tpcr: " 
+showAD (Just ad) = "len: " ++ show (ad_len ad)  ++ " flags: " ++ show (ad_flags ad) ++ "\tpcr: "
                            ++ show (ad_pcr ad) ++ "\topcr: " ++ show (ad_opcr ad) ++ "\tspl: " ++ show (ad_splice ad)
 
 printAdaptation = printInfoAd <=< BL.readFile
@@ -78,7 +78,7 @@ printDisconts pid = printInfoDisconts pid <=< BL.readFile
       mapM_ (\(ts, off) -> do
                 putStrLn$ "0x" ++ (showHex off ":")
                 showWOData ts)
-           (filter (\(ts,_) -> (af_discont.ad_flags) (fromJust (ts_ad ts))) $ 
+           (filter (\(ts,_) -> (af_discont.ad_flags) (fromJust (ts_ad ts))) $
             filter (\(ts,_) -> (isJust.ts_ad $ ts) && (ts_pid ts == pid)) $ (collectTSOff bytes 0))
 
 discontinuities pids tss = filter (\ts -> (af_discont.ad_flags) (fromJust (ts_ad ts))) $ filter (\ts -> (isJust.ts_ad $ ts) && (ts_pid ts `elem` pids)) $ tss

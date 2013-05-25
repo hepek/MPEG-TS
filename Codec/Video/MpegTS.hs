@@ -68,11 +68,14 @@ data AdaptationFlags = AdaptationFlags
     , af_extension    :: !Bool
     }
 
-defaultAdaptationFlags = AdaptationFlags False False False False False False False False
+defaultAdaptationFlags =
+  AdaptationFlags False False False False False
+                  False False False
 
 instance Show AdaptationFlags where
-  show (AdaptationFlags d r p pcr opcr spl tpd e) = 
-      (t d 'D') : (t p 'P') : (t pcr 'C') : (t opcr 'O') : (t spl 'S') : (t tpd 'P') : (t e 'E') : []
+  show (AdaptationFlags d r p pcr opcr spl tpd e) =
+      (t d 'D')   : (t p 'P') : (t pcr 'C') : (t opcr 'O') : (t spl 'S') :
+      (t tpd 'P') : (t e 'E') : []
           where
             t f c = case f of
                 True  -> c
@@ -86,7 +89,7 @@ data Adaptation = Adaptation
     , ad_splice   :: !Int
     } deriving (Show)
 
-data PES = PES 
+data PES = PES
     { pes_sid  :: !SID
     , pes_data :: !Data
     } deriving (Show)
@@ -118,7 +121,7 @@ fromWord8 x     = Other x
 data ESDescriptor = Reserved
                   | Video_stream_descriptor           | Audio_stream_descriptor          | Hierarchy_descriptor
                   | Registration_descriptor           | Data_stream_alignment_descriptor | Target_background_grid_descriptor
-                  | Video_window_descriptor           | CA_descriptor                    | ISO_639_language_descriptor       
+                  | Video_window_descriptor           | CA_descriptor                    | ISO_639_language_descriptor
                   | System_clock_descriptor           | Multiplex_buffer_utilization_descriptor
                   | Copyright_descriptor              | Maximum_bitrate_descriptor       | Private_data_indicator_descriptor
                   | Smoothing_buffer_descriptor       | STD_descriptor                   | IBP_descriptor
@@ -173,7 +176,7 @@ decodeTS = do
     (ad, cc)  <- parseAD
     let pack = TS pid ps cc
     case ad of
-       --0 -> fail (show (pack Nothing Nothing) ++ ": wrong adaptation field code")
+       0 -> fail (show (pack Nothing Nothing) ++ ": wrong adaptation field code")
        2 -> do af <- decodeAdaptation
                skip (184-(ad_len af)-1)
                return$ pack (Just af) Nothing
@@ -185,7 +188,7 @@ decodeTS = do
      where
         checkSyncByte =
           do sync <- getWord8
-             when (sync /= 0x47) checkSyncByte -- (fail$ "bad sync byte " ++ show sync)
+             when (sync /= 0x47) (fail$ "bad sync byte " ++ show sync) -- checkSyncByte
         parsePID =
           do chunk <- getWord16be
              let ps  = testBit chunk 14
@@ -263,7 +266,7 @@ decodePMT start = do
       return$ PMT_Prog stype pid esDesc)
   skip 4 --CRC32
 
-  return PMT 
+  return PMT
              {  pmt_prog_num    = prog_num
              , pmt_nextS       = False
              , pmt_pcrPID      = pcr_pid
@@ -272,7 +275,7 @@ decodePMT start = do
              }
 
 maybeParse False _     = return Nothing
-maybeParse True parser = do 
+maybeParse True parser = do
     a <- parser
     return (Just a)
 
@@ -281,7 +284,7 @@ decodeAdaptation :: Get Adaptation
 decodeAdaptation = do
    len    <- fromIntegral <$> getWord8
    cursor <- bytesRead
-   flags <- 
+   flags <-
        if (len == 0)
        then return defaultAdaptationFlags
        else decodeAdaptationFlags
