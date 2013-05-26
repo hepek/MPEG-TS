@@ -8,9 +8,9 @@ The program can print info for mpegts (188 B per packet), demux streams, detect 
 Installation
 ============
 
-   git clone github.com/hepek/MPEG-TS
-   cd MPEG-TS
-   cabal install
+    git clone github.com/hepek/MPEG-TS
+    cd MPEG-TS
+    cabal install
 
 
 Usage
